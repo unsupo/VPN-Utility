@@ -14,7 +14,7 @@ CISCO Any Connect Script
   This will disconnect if not connected to specified vpn
   A group is added as a third parameter
   - example:
-  - `cisco -c aloha-west`
+  - `cisco -c vpn-name`
 - -g|--get-connected)
   - Use this method to get the currently connected vpn
 
