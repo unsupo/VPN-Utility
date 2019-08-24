@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+cisco=/opt/cisco/anyconnect/bin/vpn
+
+
+function printHelp() {
+  echo "
+CISCO Any Connect Script
+-d|--disconnect)
+  Use this method to disconnect from whatever vpn you are on
+-c|--connect)
+  Use this method along with a parameter to connect to a vpn
+  example:
+  cisco -c aloha-west
+-g|--get-connected)
+  Use this method to get the currently connected vpn
+"
+}
+function disconnect() {
+  $cisco disconnect
+}
+function connect() {
+  [[ "$1" == "$USER" ]] && usr="" || usr="$1"
+  pass="$2"
+  host="$3"
+  grp="$4"
+  spass="push"
+  expect -c "
+set timeout -1
+proc passw {} {
+  set passwords { $2 }
+  set try 0
+  expect {
+    \"Group:*\" {
+      send -- \"$grp\\r\"
+      exp_continue
+    }
+    \"Username:*\" {
+      send -- \"$usr\\r\"
+      exp_continue
+    }
+    \"\nPass*\" {
+      send -- \"$pass\\r\"
+      exp_continue
+    }
+    \"Second Pass*\" {
+      send -- \"$spass\\r\"
+      exp_continue
+    }
+    \"accept?*\" {
+      send -- \"y\\r\"
+      exp_continue
+    }
+    \"*\state: Connected*\"
+  }
+}
+spawn $cisco -s connect $host
+passw
+interact
+"
+#  printf "$1\n$2\ny" | $cisco -s connect "$3"
+}
+function getConnection() {
+  $cisco stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g'
+}
+
+if [ "$1" == "-cmd" ]; then
+  $cisco "${@:2}"
+fi
+
+
+# shellcheck disable=SC2120
+function getPassword(){
+  dir=~/cisco-keys
+  mkdir -p $dir
+  kf=$dir/key.txt
+  def=cisco-pass.bin
+  if [ -n "$2" ]; then # if a second value is passed to function then that is the keyfile name
+      def=$2
+  fi
+  of=$dir/$def
+  if [ ! -f "$of" ]; then
+    # Read Password
+    echo -n Password:
+    read -s password
+    echo
+    # Run Command
+    # generate a 2048-bit RSA key and store it in key.txt
+    test -f $kf || openssl genrsa -out $kf 2048
+
+    # encrypt password using the RSA key in key.txt
+    echo "$password" | openssl rsautl -inkey $kf -encrypt >"$of"
+  fi
+  # decrypt the message and output to variable
+  echo "$(openssl rsautl -inkey $kf -decrypt <$of)"
+}
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case $key in
+    -d|--disconnect)
+    disconnect
+    exit 0
+    ;;
+    -c|--connect)
+    pass=$(getPassword)
+    [[ "$#" -eq 3 ]] && grp="$3" || grp=""
+    if [ "$2" == "$(getConnection)" ]; then
+      echo "already connected to: $2";
+      exit 0
+    else
+      disconnect
+    fi
+    connect "$USER" "$pass" "$2" "$grp"
+    exit 0
+    ;;
+    -g|--get-connected)
+    getConnection
+    exit 0
+    ;;
+    -h|--help)
+    printHelp
+    exit 0
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+  esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
