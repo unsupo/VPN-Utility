@@ -18,8 +18,8 @@ CISCO Any Connect Script
 - -g|--get-connected)
   - Use this method to get the currently connected vpn
 
-
-`ln -s /usr/local/bin/vpn vpn`
+`cd VPN-Utility`
+`ln -s vpn /usr/local/bin/vpn`
 
 
 ## TODO
