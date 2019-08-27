@@ -15,4 +15,4 @@ defaults write com.matryer.Bitbar pluginsDirectory "$bitbar_dir"
 
 ln -s $(pwd)/vpn /usr/local/bin/vpn
 
-cp bitbar-plugins/* $bitbar_dir/
+ln -sf $(pwd)/bitbar-plugins/* $bitbar_dir/

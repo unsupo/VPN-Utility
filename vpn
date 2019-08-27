@@ -67,13 +67,14 @@ interact
 #  printf "$1\n$2\ny" | $cisco -s connect "$3"
 }
 function getConnection() {
-  $cisco stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g'
+  vpn_conn=$($cisco stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
+  [[ "$vpn_conn" == "vpn-na-west-1.corp.salesforce.com" ]] && echo aloha-west || echo "$vpn_conn"
 }
 
 if [ "$1" == "-cmd" ]; then
   $cisco "${@:2}"
 fi
-
+PASSWORD=""
 
 # shellcheck disable=SC2120
 function getPassword(){
@@ -98,7 +99,7 @@ function getPassword(){
     echo "$password" | openssl rsautl -inkey $kf -encrypt >"$of"
   fi
   # decrypt the message and output to variable
-  echo "$(openssl rsautl -inkey $kf -decrypt <$of)"
+  PASSWORD="$(openssl rsautl -inkey $kf -decrypt <$of)"
 }
 
 POSITIONAL=()
@@ -111,7 +112,7 @@ while [[ $# -gt 0 ]]; do
     ;;
     -c|--connect)
     getPassword
-    pass=$(getPassword)
+    pass=$PASSWORD #$(getPassword)
     [[ "$#" -eq 3 ]] && grp="$3" || grp=""
     if [ "$2" == "$(getConnection)" ]; then
       echo "already connected to: $2";
@@ -131,7 +132,7 @@ while [[ $# -gt 0 ]]; do
     exit 0
     ;;
     -np|--needs-password)
-    [[ ! -f "~/cisco-keys/cisco-pass.bin" ]] && exit 0 || exit 1;
+    [[ -f ~/cisco-keys/cisco-pass.bin ]] && exit 0 || exit 1;
     ;;
     -h|--help)
     printHelp

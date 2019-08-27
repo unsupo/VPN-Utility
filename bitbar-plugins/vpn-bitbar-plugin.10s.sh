@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if ! vpn -np ; then
+  echo "Enter Password|bash=$(command -v vpn) param1='-p' terminal=true";
+  # echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
+  exit 0
+fi
 CONNECTED=0
 if [ -z "$1" ]; then
   if ps -ef|grep 'cisco -[d]' >/dev/null; then
@@ -20,8 +25,10 @@ else
     vpn -d &
     echo 'Disconnecting...| refresh=true'
   else
-    if vpn -np ; then
-      echo "|bash=vpn param1=-p";
+    if ! vpn -np ; then
+      # echo "|bash=$(command -v vpn) param1='-p' terminal=true";
+      echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
+      exit 0
     fi
     vpn -c "$1" "$2" &
     echo "Connecting ($1)...| refresh=true"
