@@ -14,6 +14,12 @@ CISCO Any Connect Script
   cisco -c aloha-west
 -g|--get-connected)
   Use this method to get the currently connected vpn
+-p|--set-password)
+  Set password
+-np|--needs-password)
+  Does the script need a password?
+  exit status of 1 or 0
+  if vpn -np ; then echo yes; else echo no; fi
 "
 }
 function disconnect() {
@@ -104,6 +110,7 @@ while [[ $# -gt 0 ]]; do
     exit 0
     ;;
     -c|--connect)
+    getPassword
     pass=$(getPassword)
     [[ "$#" -eq 3 ]] && grp="$3" || grp=""
     if [ "$2" == "$(getConnection)" ]; then
@@ -118,6 +125,13 @@ while [[ $# -gt 0 ]]; do
     -g|--get-connected)
     getConnection
     exit 0
+    ;;
+    -p|--set-password)
+    getPassword
+    exit 0
+    ;;
+    -np|--needs-password)
+    [[ ! -f "~/cisco-keys/cisco-pass.bin" ]] && exit 0 || exit 1;
     ;;
     -h|--help)
     printHelp
