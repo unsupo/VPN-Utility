@@ -20,8 +20,13 @@ CISCO Any Connect Script
 
 `cd VPN-Utility`
 
+for just the utility
+
 `ln -s $(pwd)/vpn /usr/local/bin/vpn`
 
+for the utility and the bitbar plugin
+
+`sh bitbar-installation.sh`
 
 ## TODO
 - use https://github.com/matryer/bitbar to add what vpn you're connected to the the
