@@ -68,7 +68,8 @@ interact
 }
 function getConnection() {
   vpn_conn=$($cisco stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
-  [[ "$vpn_conn" == "vpn-na-west-1.corp.salesforce.com" ]] && echo aloha-west || echo "$vpn_conn"
+  [[ "$vpn_conn" == "vpn-na-west-1.corp.salesforce.com" || "$vpn_conn" == "vpn-na-west-2.corp.salesforce.com" ]] \
+        && echo aloha-west || echo "$vpn_conn"
 }
 
 if [ "$1" == "-cmd" ]; then

@@ -1,19 +1,19 @@
 #!/bin/bash
-
-if ! vpn -np ; then
-  echo "Enter Password|bash=$(command -v vpn) param1='-p' terminal=true";
+vpn=/usr/local/bin/vpn
+if ! $vpn -np ; then
+  echo "Enter Password|bash=$vpn param1='-p' terminal=true";
   # echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
   exit 0
 fi
 CONNECTED=0
 if [ -z "$1" ]; then
-  if ps -ef|grep 'cisco -[d]' >/dev/null; then
+  if ps -ef|grep 'vpn -[d]' >/dev/null; then
     echo 'Disconnecting... | refresh=true'
-  elif ps -ef|grep 'cisco -[c]' >/dev/null; then
+  elif ps -ef|grep 'vpn -[c]' >/dev/null; then
     echo 'Connecting... | refresh=true'
   else
     CONNECTED=1
-    vpn=$(vpn -g)
+    vpn=$($vpn -g)
     if [[ -z "$vpn" ]]; then
       echo '| image=/9j/4AAQSkZJRgABAQAAkACQAAD/4QCMRXhpZgAATU0AKgAAAAgABQESAAMAAAABAAEAAAEaAAUAAAABAAAASgEbAAUAAAABAAAAUgEoAAMAAAABAAIAAIdpAAQAAAABAAAAWgAAAAAAAACQAAAAAQAAAJAAAAABAAOgAQADAAAAAQABAACgAgAEAAAAAQAAACSgAwAEAAAAAQAAACQAAAAA/+0AOFBob3Rvc2hvcCAzLjAAOEJJTQQEAAAAAAAAOEJJTQQlAAAAAAAQ1B2M2Y8AsgTpgAmY7PhCfv/CABEIACQAJAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAADAgQBBQAGBwgJCgv/xADDEAABAwMCBAMEBgQHBgQIBnMBAgADEQQSIQUxEyIQBkFRMhRhcSMHgSCRQhWhUjOxJGIwFsFy0UOSNIII4VNAJWMXNfCTc6JQRLKD8SZUNmSUdMJg0oSjGHDiJ0U3ZbNVdaSVw4Xy00Z2gONHVma0CQoZGigpKjg5OkhJSldYWVpnaGlqd3h5eoaHiImKkJaXmJmaoKWmp6ipqrC1tre4ubrAxMXGx8jJytDU1dbX2Nna4OTl5ufo6erz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAECAAMEBQYHCAkKC//EAMMRAAICAQMDAwIDBQIFAgQEhwEAAhEDEBIhBCAxQRMFMCIyURRABjMjYUIVcVI0gVAkkaFDsRYHYjVT8NElYMFE4XLxF4JjNnAmRVSSJ6LSCAkKGBkaKCkqNzg5OkZHSElKVVZXWFlaZGVmZ2hpanN0dXZ3eHl6gIOEhYaHiImKkJOUlZaXmJmaoKOkpaanqKmqsLKztLW2t7i5usDCw8TFxsfIycrQ09TV1tfY2drg4uPk5ebn6Onq8vP09fb3+Pn6/9sAQwAHBwcHBwcICAgICwsKCwsQDg0NDhAYERIREhEYJBYaFhYaFiQgJh8dHyYgOS0nJy05Qjc0N0JPR0dPZF9kg4Ow/9sAQwEHBwcHBwcICAgICwsKCwsQDg0NDhAYERIREhEYJBYaFhYaFiQgJh8dHyYgOS0nJy05Qjc0N0JPR0dPZF9kg4Ow/9oADAMBAAIRAxEAAAHv0t+dzxubHkOnZXOmG6K8jxCpxqrR518lpG3N3TtFTG1bbV//2gAIAQEAAQUC7G6jSvj2lkESVXEymgyxpjkEiXcRmUCJCUSIntxaSyj7l5zFi1hMMf3v/9oACAEDEQE/AcmaGPg8n8g4cpne7z5Ar002R3GVclGEjP8AZKQjEf7wO3//2gAIAQIRAT8BlMR48lju8y02i79X7Y4bNWfA/wB89v8A/9oACAEBAAY/Au2OvepZpoB6PnJAKfNhQ8+yAP2nhTTzawNY1PlpRUFXH0+4mJCSa6l0VxJr9/8A/8QAMxABAAMAAgICAgIDAQEAAAILAREAITFBUWFxgZGhscHw0RDh8SAwQFBgcICQoLDA0OD/2gAIAQEAAT8hs1oxxkhO0QCcP/OW2wHlszSCWPB7btdIDzz+rxX/AKf864NPgisBoR7fNyeELybm+GxcIVU8uf8AsWYPWBkHG19BsRv/AOP/2gAMAwEAAhEDEQAAEG8dDwHBHPP/xAAzEQEBAQADAAECBQUBAQABAQkBABEhMRBBUWEgcfCRgaGx0cHh8TBAUGBwgJCgsMDQ4P/aAAgBAxEBPxBDkw2GQsR1HLpH5PAOUDFfp1FTsJ2G8oX8P//aAAgBAhEBPxBY5J8HccuHL0HX8+APPL5hIbbt/q/D/9oACAEBAAE/EKkzuziBKN8gDWO4K5UhJkfp/wCRrUwXKb9UVVJ8B2m0lMrUIQZyfkVu2Ph5RiPsf+LWBI3YifdK+vk5mQq82fJWLIYPbpnivRXGQYdMMJ3/AIkkVZ7oGYHycJUBLvPVbuXFQMAJ7gP/AMf/2Q=='
     else
@@ -22,15 +22,15 @@ if [ -z "$1" ]; then
   fi
 else
   if [[ "$1" = "disconnect" ]]; then
-    vpn -d &
+    $vpn -d &
     echo 'Disconnecting...| refresh=true'
   else
-    if ! vpn -np ; then
+    if ! $vpn -np ; then
       # echo "|bash=$(command -v vpn) param1='-p' terminal=true";
       echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
       exit 0
     fi
-    vpn -c "$1" "$2" &
+    $vpn -c "$1" "$2" &
     echo "Connecting ($1)...| refresh=true"
   fi
 fi
