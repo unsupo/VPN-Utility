@@ -1,6 +1,11 @@
 #!/bin/bash
 vpn=/usr/local/bin/vpn
-if ! $vpn -np ; then
+ecfile=~/vpn-exitcode
+if [ -f $ecfile ] && [ "$(cat $ecfile)" == 22 ]; then
+  rm -f $ecfile
+  $vpn -rp
+fi
+if ! $vpn -np; then
   echo "Enter Password|bash=$vpn param1='-p' terminal=true";
   # echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
   exit 0
@@ -30,7 +35,7 @@ else
       echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
       exit 0
     fi
-    $vpn -c "$1" "$2" &
+    $vpn -c "$1" "$2" || echo $? > $ecfile &
     echo "Connecting ($1)...| refresh=true"
   fi
 fi

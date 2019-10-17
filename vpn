@@ -2,6 +2,7 @@
 
 cisco=/opt/cisco/anyconnect/bin/vpn
 
+# TODO make password environment variable as to not print to console
 
 function printHelp() {
   echo "
@@ -14,12 +15,23 @@ CISCO Any Connect Script
   cisco -c aloha-west
 -g|--get-connected)
   Use this method to get the currently connected vpn
--p|--set-password)
-  Set password
+-p|--get-password)
+  get password
+-cp|--change-password)
+  change password
+-rp|--remove-password)
+  remove password
 -np|--needs-password)
   Does the script need a password?
   exit status of 1 or 0
   if vpn -np ; then echo yes; else echo no; fi
+-sp|--set-password)
+  requires: vpn name as parameter
+  This sets a password for a specific vpn use this if this vpn
+  password differs from global password
+
+EXIT CODES:
+  22 - means unable to login with username/password/code combination
 "
 }
 function disconnect() {
@@ -27,11 +39,13 @@ function disconnect() {
 }
 function connect() {
   [[ "$1" == "$USER" ]] && usr="" || usr="$1"
+  export VPN_PASS="$2"
   pass="$2"
   host="$3"
   grp="$4"
   spass="push"
-  expect -c "
+  output=$(expect -c "
+log_user 0
 set timeout -1
 proc passw {} {
   set passwords { $2 }
@@ -63,7 +77,10 @@ proc passw {} {
 spawn $cisco -s connect $host
 passw
 interact
-"
+")
+  if grep 'Login failed: We can’t log you in. Check your username, password, and verification code' <<< "$output" ; then
+    exit 22
+  fi
 #  printf "$1\n$2\ny" | $cisco -s connect "$3"
 }
 function getConnection() {
@@ -128,12 +145,24 @@ while [[ $# -gt 0 ]]; do
     getConnection
     exit 0
     ;;
-    -p|--set-password)
+    -p|--get-password)
+    getPassword
+    exit 0
+    ;;
+    -rp|--remove-password)
+    rm -f ~/cisco-keys/{key.txt,cisco-pass.bin}
+    exit 0
+    ;;
+    -cp|--change-password)
+    rm -f ~/cisco-keys/{key.txt,cisco-pass.bin}
     getPassword
     exit 0
     ;;
     -np|--needs-password)
     [[ -f ~/cisco-keys/cisco-pass.bin ]] && exit 0 || exit 1;
+    ;;
+    -sp|--set-password)
+
     ;;
     -h|--help)
     printHelp
