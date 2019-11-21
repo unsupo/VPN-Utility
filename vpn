@@ -2,8 +2,6 @@
 
 cisco=/opt/cisco/anyconnect/bin/vpn
 
-# TODO make password environment variable as to not print to console
-
 function printHelp() {
   echo "
 CISCO Any Connect Script
@@ -35,7 +33,7 @@ EXIT CODES:
 "
 }
 function disconnect() {
-  $cisco disconnect
+  ${cisco} disconnect
 }
 function connect() {
   [[ "$1" == "$USER" ]] && usr="" || usr="$1"
@@ -44,11 +42,11 @@ function connect() {
   host="$3"
   grp="$4"
   spass="push"
+  export pass="${pass}"
   output=$(expect -c "
 log_user 0
 set timeout -1
-proc passw {} {
-  set passwords { $2 }
+proc passw {pass} {
   set try 0
   expect {
     \"Group:*\" {
@@ -60,7 +58,7 @@ proc passw {} {
       exp_continue
     }
     \"\nPass*\" {
-      send -- \"$pass\\r\"
+      send -- \"\$pass\\r\"
       exp_continue
     }
     \"Second Pass*\" {
@@ -75,7 +73,7 @@ proc passw {} {
   }
 }
 spawn $cisco -s connect $host
-passw
+passw \$env(pass)
 interact
 ")
   if grep 'Login failed: We can’t log you in. Check your username, password, and verification code' <<< "$output" ; then
@@ -84,12 +82,13 @@ interact
 #  printf "$1\n$2\ny" | $cisco -s connect "$3"
 }
 function getConnection() {
-  vpn_conn=$($cisco stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
+  vpn_conn=$(${cisco} stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
+  # TODO add this as an option for alias in sqlite3 database instead of hardcoded that way more can be added on the commandline
   [[ "$vpn_conn" == "vpn-na-west-1.corp.salesforce.com" || "$vpn_conn" == "vpn-na-west-2.corp.salesforce.com" ]] \
         && echo aloha-west || echo "$vpn_conn"
 }
 
-if [ "$1" == "-cmd" ]; then
+if [[ "$1" == "-cmd" ]]; then
   $cisco "${@:2}"
 fi
 PASSWORD=""
@@ -97,14 +96,14 @@ PASSWORD=""
 # shellcheck disable=SC2120
 function getPassword(){
   dir=~/cisco-keys
-  mkdir -p $dir
-  kf=$dir/key.txt
+  mkdir -p ${dir}
+  kf=${dir}/key.txt
   def=cisco-pass.bin
-  if [ -n "$2" ]; then # if a second value is passed to function then that is the keyfile name
+  if [[ -n "$2" ]]; then # if a second value is passed to function then that is the keyfile name
       def=$2
   fi
   of=$dir/$def
-  if [ ! -f "$of" ]; then
+  if [[ ! -f "$of" ]]; then
     # Read Password
     echo -n Password:
     read -s password
@@ -123,7 +122,7 @@ function getPassword(){
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
   key="$1"
-  case $key in
+  case ${key} in
     -d|--disconnect)
     disconnect
     exit 0
@@ -132,7 +131,7 @@ while [[ $# -gt 0 ]]; do
     getPassword
     pass=$PASSWORD #$(getPassword)
     [[ "$#" -eq 3 ]] && grp="$3" || grp=""
-    if [ "$2" == "$(getConnection)" ]; then
+    if [[ "$2" == "$(getConnection)" ]]; then
       echo "already connected to: $2";
       exit 0
     else
