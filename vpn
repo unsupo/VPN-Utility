@@ -43,6 +43,7 @@ function connect() {
   grp="$4"
   spass="push"
   export pass="${pass}"
+  echo "CONNECTING"
   output=$(expect -c "
 log_user 0
 set timeout -1
@@ -69,10 +70,14 @@ proc passw {pass} {
       send -- \"y\\r\"
       exp_continue
     }
+    \"Answer:*\" {
+      send -- \"push\\r\"
+      exp_continue
+    }
     \"*\state: Connected*\"
   }
 }
-spawn $cisco -s connect $host
+spawn $cisco -s connect \"${host}\"
 passw \$env(pass)
 interact
 ")
@@ -84,7 +89,7 @@ interact
 function getConnection() {
   vpn_conn=$(${cisco} stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
   # TODO add this as an option for alias in sqlite3 database instead of hardcoded that way more can be added on the commandline
-  [[ "$vpn_conn" == "vpn-na-west-1.corp.salesforce.com" || "$vpn_conn" == "vpn-na-west-2.corp.salesforce.com" ]] \
+  [[ "$vpn_conn" =~ vpn-na-west-[0-9]+\.corp\.salesforce\.com ]] \
         && echo aloha-west || echo "$vpn_conn"
 }
 

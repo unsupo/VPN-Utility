@@ -42,7 +42,7 @@ fi
 echo "---"
 [[ "$CONNECTED" -eq 1 ]] && echo "Disconnect| color=red bash='$0' param1=disconnect terminal=false refresh=true";
 echo "Connect | color=green"
-echo "--aloha-west | bash='$0' param1=aloha-west terminal=false refresh=true"
+echo "--aloha-west | bash='$0' param1=\"AmerWest\" terminal=false refresh=true"
 echo "--internal.tomax.com | bash='$0' param1=internal.tomax.com terminal=false refresh=true"
 echo "--slc.tomax.com"
 echo "----Retail.net | bash='$0' param1=slc.tomax.com param2=0 terminal=false refresh=true"
