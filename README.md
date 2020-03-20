@@ -32,9 +32,9 @@ for the utility and the bitbar plugin
 - use https://github.com/matryer/bitbar to add what vpn you're connected to the the
 mac toolbar
 - Also use bitbar to disconnect and connect to various vpns
+- set the available vpns to the ones listed in cisco
 
 ## TODO
-- set the available vpns to the ones listed in cisco
 - set available vpns to custom ones in a properties file or global variable...
 - tie this together with my SSH-Utility to swap to a vpn when you need to connect
 to a host on a different vpn
