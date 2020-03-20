@@ -1,17 +1,27 @@
 #!/bin/bash
 vpn=/usr/local/bin/vpn
 ecfile=~/vpn-exitcode
-if [ -f $ecfile ] && [ "$(cat $ecfile)" == 22 ]; then
-  rm -f $ecfile
-  $vpn -rp
+if [[ -f ${ecfile} ]] && [[ "$(cat ${ecfile})" == 22 ]]; then
+  rm -f ${ecfile}
+  ${vpn} -rp
 fi
-if ! $vpn -np; then
+if ! ${vpn} -np; then
   echo "Enter Password|bash=$vpn param1='-p' terminal=true";
   # echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
   exit 0
 fi
+
+function customConnect(){
+  searchString=$(osascript -e '
+set theString to text returned of (display dialog "Enter Name of VPN to connect to" default answer "" buttons {"Connect","Cancel"} default button 1)
+')
+  if [[ ! -z "${searchString}" ]]; then
+      textToSearch=$(echo "$searchString" | perl -MURI::Escape -wlne 'print uri_escape $_')
+  fi
+}
+
 CONNECTED=0
-if [ -z "$1" ]; then
+if [[ -z "$1" ]]; then # if nothing was selected then show either no vpn/the current vpn/or status like connecting or disconnecting
   if ps -ef|grep 'vpn -[d]' >/dev/null; then
     echo 'Disconnecting... | refresh=true'
   elif ps -ef|grep 'vpn -[c]' >/dev/null; then
@@ -29,13 +39,17 @@ else
   if [[ "$1" = "disconnect" ]]; then
     $vpn -d &
     echo 'Disconnecting...| refresh=true'
+  elif [[ "$1" = "search" ]]; then
+    customConnect
+    $vpn -c "$textToSearch" "$2" || echo $? > ${ecfile} &
+    echo "Connecting ($1)...| refresh=true"
   else
     if ! $vpn -np ; then
       # echo "|bash=$(command -v vpn) param1='-p' terminal=true";
       echo "Run vpn -p in terminal| bash=/bin/echo param1=test"
       exit 0
     fi
-    $vpn -c "$1" "$2" || echo $? > $ecfile &
+    $vpn -c "$1" "$2" || echo $? > ${ecfile} &
     echo "Connecting ($1)...| refresh=true"
   fi
 fi
@@ -47,3 +61,4 @@ echo "--internal.tomax.com | bash='$0' param1=internal.tomax.com terminal=false 
 echo "--slc.tomax.com"
 echo "----Retail.net | bash='$0' param1=slc.tomax.com param2=0 terminal=false refresh=true"
 echo "----Store | bash='$0' param1=slc.tomax.com param2=1 terminal=false refresh=true"
+echo "--Click For Custom | bash='$0' param1=search terminal=false"

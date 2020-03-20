@@ -35,8 +35,20 @@ EXIT CODES:
 function disconnect() {
   ${cisco} disconnect
 }
+# connect won't work without disabling cisco anyconnect
+function disable_cisco_anyconnect(){
+osascript -e '
+if application "Cisco AnyConnect Secure Mobility Client" is running then
+-- display dialog "yes"
+tell application "Cisco AnyConnect Secure Mobility Client"
+    quit
+end tell
+end if
+'
+}
 function connect() {
   [[ "$1" == "$USER" ]] && usr="" || usr="$1"
+  disable_cisco_anyconnect || connect $@
   export VPN_PASS="$2"
   pass="$2"
   host="$3"
@@ -90,7 +102,10 @@ function getConnection() {
   vpn_conn=$(${cisco} stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
   # TODO add this as an option for alias in sqlite3 database instead of hardcoded that way more can be added on the commandline
   [[ "$vpn_conn" =~ vpn-na-west-[0-9]+\.corp\.salesforce\.com ]] \
-        && echo aloha-west || echo "$vpn_conn"
+        && echo aloha-west || \
+  [[ "$vpn_conn" =~ vpn-amer[0-9]+-a\.corp\.salesforce\.com ]] \
+        && echo aloha-west-1 || \
+        echo "$vpn_conn"
 }
 
 if [[ "$1" == "-cmd" ]]; then
