@@ -53,10 +53,18 @@ else
     echo "Connecting ($1)...| refresh=true"
   fi
 fi
+function getAllVPNFromProfile(){
+    grep 'HostName>.*<' /opt/cisco/anyconnect/profile/ac-win-mac-profile.xml | sed -n 's:.*<HostName>\(.*\)</HostName>.*:\1:p' | sort
+}
+
 echo "---"
 [[ "$CONNECTED" -eq 1 ]] && echo "Disconnect| color=red bash='$0' param1=disconnect terminal=false refresh=true";
 echo "Connect | color=green"
-echo "--aloha-west | bash='$0' param1=\"AmerWest\" terminal=false refresh=true"
+
+for i in $(getAllVPNFromProfile); do
+    echo "--$i | bash='$0' param1=\"$i\" terminal=false refresh=true"
+done
+
 echo "--internal.tomax.com | bash='$0' param1=internal.tomax.com terminal=false refresh=true"
 echo "--slc.tomax.com"
 echo "----Retail.net | bash='$0' param1=slc.tomax.com param2=0 terminal=false refresh=true"

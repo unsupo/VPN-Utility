@@ -98,14 +98,48 @@ interact
   fi
 #  printf "$1\n$2\ny" | $cisco -s connect "$3"
 }
+function getVPNAlias(){
+    profileFile=/opt/cisco/anyconnect/profile/ac-win-mac-profile.xml
+    python -c "v=False
+with open('/opt/cisco/anyconnect/profile/ac-win-mac-profile.xml') as r:
+     a=r.read()
+dn={}
+da={}
+last=None
+for i in a.split('\n'):
+    if '<HostEntry>' in i:
+        v=True
+        continue
+    if '</HostEntry>' in i: v=False
+    if v:
+        vv=i.split('<')[1].split('>')
+        if vv[0] == 'HostName':
+            last=vv[1]
+        if vv[0] == 'HostAddress':
+            dn[last]=vv[1]
+            da[vv[1]]=last
+
+import sys
+import re
+value=sys.argv[1]
+try:
+    print(da[value])
+except Exception as e:
+    pass
+for ha,hn in da.items():
+    has=ha.split('.corp')
+    if re.match((has[0]+'[\-|0-9|a-z]+'+'.corp'+has[1]).replace('.','\.'),sys.argv[1]):
+        print(hn)
+" "$1"
+
+}
+
 function getConnection() {
   vpn_conn=$(${cisco} stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
   # TODO add this as an option for alias in sqlite3 database instead of hardcoded that way more can be added on the commandline
-  [[ "$vpn_conn" =~ vpn-na-west-[0-9]+\.corp\.salesforce\.com ]] \
-        && echo aloha-west || \
-  [[ "$vpn_conn" =~ vpn-amer[0-9]+-a\.corp\.salesforce\.com ]] \
-        && echo aloha-west-1 || \
-        echo "$vpn_conn"
+   res=$(getVPNAlias ${vpn_conn})
+#   echo $res
+   [[ -z ${res} ]] && echo ${vpn_conn} || echo ${res}
 }
 
 if [[ "$1" == "-cmd" ]]; then
