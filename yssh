@@ -1,0 +1,398 @@
+#!/usr/bin/env bash
+
+SCRIPT_NAME="SSH-Utility ($0)"
+SCRIPT_DESCRIPTION="
+This script uses and expect script to help log you into remote servers or scp to or from them.
+It also uses sqlite to pattern match a name so you don't have to remember ips or hostnames.
+You can set global passwords for users, meaning whenever that user tries to log into any
+server it will use that password.  Or you can use specific ip based passwords, so if you try
+to log into a host with that ip and username it will use the specific password.\n
+"
+
+function printHelp() {
+  echo "############   ${SCRIPT_NAME}   ############"
+  printf "${SCRIPT_DESCRIPTION}"
+  echo '-t|--time-out'
+  echo '  set the ping timeout'
+  echo '-ld|--list-defaults'
+  echo '  print out all the default values stored in sqllite'
+  echo '-sd|--set-default'
+  echo '  set or override a default value key=value'
+  echo '  be_user=   # user to automatically login as ie root'
+  echo '  use_first_match=   # whether to prompt yes when searching for a match ie yes'
+  echo '-y|--yes'
+  echo '  answer yes to all prompts'
+  echo '-cp|--change-password'
+  echo '  change a password with no arguments changes global password used'
+  echo '  else add host (\* for global) and optionally user'
+  echo '  example changes/sets password for pi user if used to login with:'
+  echo '  yssh -cp \* pi '
+  echo '-q|--query'
+  echo '  dont ssh just show results that come up'
+  echo '-aa|--add-alias'
+  echo '  add an alias to show up in query ip=alias'
+  echo '-u|--user'
+  echo '  the user to login to the server with'
+  echo '-scp'
+  echo '  scp a file to a machine'
+  echo '  requires source and destination'
+  echo '  example:'
+  echo '  yssh <some-host-ip|pattern> -scp <to|from> path/to/source/file path/to/destination/file'
+}
+
+[[ -z "$1" ]] && { printHelp ; exit 1; }
+
+function install_expect() {
+    sudo apt-get update -y && sudo apt-get install -y expect
+}
+
+command -v expect || {
+  echo "expect not found"
+  read -p -r "Install expect? (Y/N): " confirm && [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]] || exit 1
+  install_expect;
+}
+
+dir=~/yssh
+mkdir -p ${dir}
+
+
+SQL_KEY_DEFAULTS=('be_user' 'use_first_match')
+SQL_VALUES_DEFAULTS=()
+for i in "${SQL_KEY_DEFAULTS[@]}"; do
+  SQL_VALUES_DEFAULTS+=($(sqlite3 ${dir}/test.sqllite "select value from defaults where _key in ('$i')"))
+done
+
+function listDefaults() {
+  for (( i=0; i<${#SQL_KEY_DEFAULTS[@]}; i++ )); do
+    echo "${SQL_KEY_DEFAULTS[$i]}=${SQL_VALUES_DEFAULTS[$i]}"
+  done
+}
+
+function getDefault() {
+  local v=$2
+  k=$1
+  for (( i=0; i<${#SQL_KEY_DEFAULTS[@]}; i++ )); do
+    if [[ "${SQL_KEY_DEFAULTS[$i]}" == "$k" ]]; then
+      eval $v="'${SQL_VALUES_DEFAULTS[$i]}'"
+      return 0
+    fi
+  done
+}
+
+function getPassword(){
+  local pass=$1
+  kf=${dir}/key.txt
+  def=global-pass.bin
+  if [[ -n "$2" ]]; then # if a second value is passed to function then that is the keyfile name
+      def=$2
+  fi
+  of=${dir}/${def}
+  if [[ ! -f "$of" ]]; then
+    # Read Password
+    echo -n Password:
+    read -s password
+    echo
+    # Run Command
+    # generate a 2048-bit RSA key and store it in key.txt
+    test -f ${kf} || openssl genrsa -out ${kf} 2048
+
+    # encrypt password using the RSA key in key.txt
+    echo ${password} | openssl rsautl -inkey ${kf} -encrypt >${of}
+  fi
+  # decrypt the message and output to variable
+  eval $pass="'`openssl rsautl -inkey $kf -decrypt <$of`'"
+}
+function valid_ip(){
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+function create_tables() {
+  sqlite3 ${dir}/test.sqllite "
+  create table if not exists hosts(
+    ip text primary key,
+    hostname text,
+    minion_id text,
+    extra_info text
+  );
+
+  create table if not exists defaults(
+    _key text primary key ,
+    value text
+  );
+
+  create table if not exists alt_passwords(
+    ip text primary key,
+    user text,
+    passfile text
+  );
+  "
+  # while read l; do
+  #   v=""
+  #   for w in $l; do
+  #     v=$w;
+  #     break;
+  #   done
+  #   vv=(${v//,/ })
+  #   ip=""
+  #   hostn=""
+  #   l="${#vv[@]}"
+  #   if [ "$l" -eq 2 ]; then
+  #     hostn=${vv[0]}
+  #     ip=${vv[1]}
+  #   elif [ "$l" -eq 1 ]; then
+  #     if ! valid_ip $i; then
+  #       hostn=${vv[0]}
+  #       # ip=`host $hostn | awk '$0=$NF' | tail -n1` # takes too long
+  #     else
+  #       ip=${vv[0]}
+  #     fi
+  #   fi
+  #   echo "$ip=$hostn"
+  # done < ~/.ssh/known_host
+}
+
+create_tables
+
+function getIp() {
+  ipv=$2
+  ipv1=$2
+  # Validate ip given
+  # If not a valid ip then try to parse the hostname to an ip
+  if ! valid_ip "$ipv1"; then
+    ipv=$(gtimeout 1 host "$ipv1" | awk '$0=$NF')
+  fi
+  # if still not valid then try to get it from sqllite database
+  if [[ -z "$ipv" ]] || [[ "2(SERVFAIL)" == "$ipv" ]] || [[ "3(NXDOMAIN)" == "$ipv" ]]; then
+    echo 'Match'
+    sqlite3 $dir/test.sqllite "select * from hosts where ip glob '*$ipv1*' or hostname glob '*$ipv1*' or minion_id glob '*$ipv1*' or extra_info glob '*$ipv1*' order by ip"|head -n1
+    yn=$YES
+    getDefault 'use_first_match' dyn
+    if [[ -n "$dyn" ]] && [[ -z "$yn" ]]; then
+      yn=$dyn
+    fi
+    if [[ -z "$yn" ]]; then
+      read -p "ssh to this machine (y/n): " yn
+    fi
+    case ${yn} in
+      [Yy]* )
+        ipv=`sqlite3 ${dir}/test.sqllite "select ip from hosts where ip glob '*$ipv1*' or hostname glob '*$ipv1*' or minion_id glob '*$ipv1*' or extra_info glob '*$ipv1*' order by ip"|head -n1`
+        ;;
+        * )
+        echo "invalid hostname or ip $ipv1"
+        exit 1
+        ;;
+    esac
+  fi
+  eval "$1='$ipv'"
+}
+function changePassword() {
+  # if a host/ip wasn't passed then change global password, other wise change that host's password
+  echo "$1 $2"
+  if [[ -n "$1" ]] && [[ "*" != "$1" ]]; then # if variable is not empty or * not given then host/ip was passed
+    host=$1
+    getIp ip "$host"
+  else
+    [[ -z "$1" ]] && u=$USER || u=$2
+    echo "changing global password for $u"
+    passFile="global-pass-$u.bin"
+    rm -f "$dir/$passFile"
+    getPassword pass "$passFile"
+    exit 0
+  fi
+  if [[ -n "$2" ]]; then # if not empty then user was also passed
+    user=$2
+  else
+    user=$USER
+  fi
+  echo "Changing password for User=$user Ip=$ip"
+  passfile=$(sqlite3 $dir/test.sqllite "select passfile from alt_passwords where ip = '$ip' and user= '$user'")
+  echo "$passfile"
+  if [[ -n "$passfile" ]]; then # if passfile is not empty then remove old pass
+    rm -f $dir/"$passfile"
+    getPassword pass "$passfile"
+    exit 0
+  fi
+  passfile="$ip-$user.bin"
+  getPassword pass "$passfile"
+  `sqlite3 ${dir}/test.sqllite "insert into alt_passwords(ip,user,passfile) values('$ip','$user','$passfile')"`
+}
+
+
+
+POSITIONAL=()
+TIMEOUT=1
+while [[ $# -gt 0 ]]; do
+  key="$1"
+  case ${key} in
+    -u|--user)
+    LOGIN_USER="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -scp)
+    [[ -z "$2" || -z "$3" || -z "$4" ]] && { echo 'scp switch needs 3 values to/from from-file and to-file'; exit 1; }
+    SCP=$(echo "$2" | tr "[:upper:]" "[:lower:]")
+    [[ "$SCP" != "to" && "$SCP" != "from" ]] && { echo 'scp first option must be either to or from'; exit 1; }
+    FROM_DIR="$3"
+    TO_DIR="$4"
+    shift # past argument
+    shift # past value
+    shift # past second value
+    ;;
+    -t|--time-out)
+    TIMEOUT="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -h|--help)
+    printHelp
+    exit 0
+    ;;
+    -ld|--list-defaults)
+    LIST_DEFAULTS="TRUE"
+    shift # past argument
+    ;;
+    -sd|--set-default)
+    vv=$2
+    v=(${vv//=/ })
+    sqlite3 ${dir}/test.sqllite "insert into defaults(_key,value) values('${v[0]}','${v[1]}') ON CONFLICT(_key) DO UPDATE SET value=excluded.value WHERE excluded._key=defaults._key;"
+    exit 0
+    shift # past argument
+    shift # past value
+    ;;
+    -y|--yes)
+    YES="y"
+    shift # past argument
+    ;;
+    -cp|--change-password)
+    changePassword "$2" "$3"
+    exit 0
+    shift # past argument
+    ;;
+    -q|--query)
+    QUERY="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -aa|--add-alias)
+    vv=$2
+    v=(${vv//=/ })
+    sqlite3 ${dir}/test.sqllite "insert into hosts(ip,extra_info) values('${v[0]}','${v[1]}') ON CONFLICT(ip) DO UPDATE SET extra_info=excluded.extra_info||','||hosts.extra_info WHERE excluded.ip=hosts.ip;;"
+    exit 0
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+  esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+if [[ -n "$LIST_DEFAULTS" ]]; then
+  listDefaults
+  exit 0
+fi
+if [[ -n "$QUERY" ]]; then
+  sqlite3 ${dir}/test.sqllite "select * from hosts where ip glob '*$QUERY*' or hostname glob '*$QUERY*' or minion_id glob '*$QUERY*' or extra_info glob '*$QUERY*';"
+  exit 0
+fi
+if [[ -z "$LOGIN_USER" ]]; then # if login user is empty
+  LOGIN_USER=$USER # then use system user as login user
+fi
+
+# if password file doesn't exist
+# TODO or password is wrong
+# prompt for password and store it as v
+getPassword v "global-pass-$LOGIN_USER.bin"
+
+kdir=${dir}/keydir
+rfile="$kdir/salt-ssh.rsa"
+mkdir -p ${kdir}
+test -e ${rfile} || yes no | ssh-keygen -t rsa -f ${rfile} -N ''
+kfile="$rfile.pub"
+
+chmod 400 ${kfile}
+
+getIp ip "$1"
+[[ -z "$SCP" ]] && val='ssh into' || val="scp $SCP"
+echo "trying to $val $ip"
+# don't bother trying to ssh in if the host times out
+if ! ping "$ip" -c1 -W "$TIMEOUT" > /dev/null 2>&1 ; then
+  echo "host timed out, increase wait by passing -t <seconds> or give up"
+  exit 2
+fi
+
+# add the host and ip to the known_hosts file
+ssh-keyscan -t rsa,dsa "$ip" 2>&1 | sort -u - ~/.ssh/known_hosts > ~/.ssh/tmp_hosts
+mv ~/.ssh/tmp_hosts ~/.ssh/known_hosts
+
+# if second command line argument is given then log in then be that user
+user=$2
+getDefault 'be_user' uu
+if [[ -n "$uu" ]] && [[ -z "$user" ]]; then
+  user=$uu
+fi
+vv=""
+if [[ -n "$user" ]]; then
+  vv="
+send -- \"sudo su - $user\\r\"
+passw $user \$env(pass)
+"
+fi
+passes="$v"
+
+passfile=$(sqlite3 ${dir}/test.sqllite "select passfile from alt_passwords where ip = '$ip' and user= '$LOGIN_USER'")
+
+if [[ -n "$passfile" ]]; then # if passfile isn't empty
+  getPassword v1 "$passfile"
+  passes="$v1 $v"
+fi
+
+CMD="ssh $LOGIN_USER@$ip"
+if [[ "$SCP" == "to" ]]; then
+  CMD="scp $FROM_DIR $LOGIN_USER@$ip:$TO_DIR"
+elif [[ "$SCP" == "from" ]]; then
+  CMD="scp $LOGIN_USER@$ip:$FROM_DIR $TO_DIR"
+fi
+
+export pass="${passes}"
+expect -c "
+  set timeout 300
+  proc passw {user passwords} {
+    set try 0
+    expect {
+      -re \"^.*assword.*:.*$\" {
+        if { \$try >= [llength \$passwords] } {
+          send_error \">>> wrong passwords for user \$user\\r\"
+          interact
+        }
+        send -- \"[lindex \$passwords \$try]\\r\"
+        incr try
+        exp_continue
+      }
+      \"Passcode or option*\" {
+        send -- \"1\\r\"
+        exp_continue
+      }
+      \"*\$user@*\"
+    }
+  }
+
+  spawn $CMD
+  passw $LOGIN_USER \$env(pass)
+  $vv
+  interact
+" 2>/dev/null
+
+exit 0
