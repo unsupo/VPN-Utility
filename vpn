@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
 cisco=/opt/cisco/anyconnect/bin/vpn
+python=$(which python)
+if [ -z "${python}" ]; then
+  python=/usr/local/bin/python
+fi
+
 
 function printHelp() {
   echo "
@@ -100,7 +105,7 @@ interact
 }
 function getVPNAlias(){
     profileFile=/opt/cisco/anyconnect/profile/ac-win-mac-profile.xml
-    python -c "v=False
+    $python -c "v=False
 with open('/opt/cisco/anyconnect/profile/ac-win-mac-profile.xml') as r:
      a=r.read()
 dn={}
@@ -137,9 +142,9 @@ for ha,hn in da.items():
 function getConnection() {
   vpn_conn=$(${cisco} stats|grep 'Connected to'|sed 's/.*to //' | sed 's/\.$//g')
   # TODO add this as an option for alias in sqlite3 database instead of hardcoded that way more can be added on the commandline
-   res=$(getVPNAlias ${vpn_conn})
+   res=$(getVPNAlias "${vpn_conn}")
 #   echo $res
-   [[ -z ${res} ]] && echo ${vpn_conn} || echo ${res}
+   [[ -z ${res} ]] && echo "${vpn_conn}" || echo "${res}"
 }
 
 if [[ "$1" == "-cmd" ]]; then
